@@ -167,10 +167,16 @@ class Classifier:
     def predict(self, remaining, arch):
         assert type(remaining) == type({})
         remaining_archs = []
+        # load pretrained GVAE model
+        checkpoint = torch.load('pretrained/dim-16/model-circuits_4_qubits.json.pt', map_location=torch.device('cpu'))
+        input_dim = 2 + len(args.allowed_gates) + args.n_qubits
+        GVAE_model = GVAE((input_dim, 32, 64, 128, 64, 32, 16), normalize=True, dropout=0.3, **configs[4]['GAE'])
+        GVAE_model.load_state_dict(checkpoint['model_state'])
+        Z = []
         for k, v in remaining.items():
             net = json.loads(k)
             if arch['phase'] == 0:
-                net = insert_job(arch['single'], net) 
+                net = insert_job(arch['single'], net)
                 net = cir_to_matrix(net, arch['enta'], self.arch_code, self.fold)
                 circuit_ops = generate_circuits(net)
                 op_list, gate_matrix, adj_matrix = get_gate_and_adj_matrix(circuit_ops)
@@ -178,22 +184,19 @@ class Classifier:
                 ops = torch.tensor(gate_matrix, dtype=torch.float32).unsqueeze(0)
                 adj = torch.tensor(adj_matrix, dtype=torch.float32).unsqueeze(0)
                 adj, ops, prep_reverse = preprocessing(adj, ops, **configs[4]['prep'])
-                # load pretrained GVAE model
-                checkpoint = torch.load('pretrained/dim-16/model-circuits_4_qubits.json.pt', map_location=torch.device('cpu'))
-                input_dim = 2 + len(args.allowed_gates) + args.n_qubits
-                GVAE_model = GVAE((input_dim, 32, 64, 128, 64, 32, 16), normalize=True, dropout=0.3, **configs[4]['GAE'])
-                GVAE_model.load_state_dict(checkpoint['model_state'])
-                Z = []
+                # get latent representation
                 mu, logvar = GVAE_model.encoder(ops, adj)
                 Z.append(mu)
-                z = Z[0].squeeze(0)
+                z = Z[0].squeeze(0).tolist()
             else:
                 net = insert_job(arch['enta'], net)
-                net = cir_to_matrix(arch['single'], net, self.arch_code, self.fold)           
-            remaining_archs.append(net)
+                net = cir_to_matrix(arch['single'], net, self.arch_code, self.fold)
+            # remaining_archs.append(net)
+            remaining_archs.append(z)
+
         remaining_archs = torch.from_numpy(np.asarray(remaining_archs, dtype=np.float32))
         remaining_archs = normalize(remaining_archs)
-                
+
         if torch.cuda.is_available():
             remaining_archs = remaining_archs.cuda()
         t1 = time.time()

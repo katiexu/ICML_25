@@ -120,12 +120,17 @@ def normalize(x):
 class FC(nn.Module):
     def __init__(self, arch):
         super(FC, self).__init__()
-        m = arch[0]     #qubit
-        n = arch[1]     #layer
-        self.fc01 = nn.Linear(m*n, 16)
-        self.fc02 = nn.Linear(2*m*n, 16)
+        self.conv = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=(3, 3), stride=1, padding=1)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.flatten = nn.Flatten()
 
-        self.fc11 = nn.Linear(32, 64)
+        # m = arch[0]     #qubit
+        # n = arch[1]     #layer
+        # self.fc01 = nn.Linear(m*n, 16)
+        # self.fc02 = nn.Linear(2*m*n, 16)
+
+        # self.fc11 = nn.Linear(32, 64)
+        self.fc11 = nn.Linear(16 * 17 * 8, 64)
         self.fc12 = nn.Linear(64, 32)
         self.fc13 = nn.Linear(32, 32)
         
@@ -134,20 +139,25 @@ class FC(nn.Module):
         self.cls3= nn.Linear(32,2)
 
     def forward(self, x):
-        layer_n = x.shape[1]
-        all = [i for i in range(0, layer_n)]
-        topo = [i for i in range(0, layer_n, 3)]
-        single = [i for i, j in enumerate(all) if i not in topo]
+        # layer_n = x.shape[1]
+        # all = [i for i in range(0, layer_n)]
+        # topo = [i for i in range(0, layer_n, 3)]
+        # single = [i for i, j in enumerate(all) if i not in topo]
+        #
+        # x1 = x[:,topo,:]
+        # x2 = x[:,single,:]
 
-        x1 = x[:,topo,:]
-        x2 = x[:,single,:]
+        # x1=x1.view(x1.size(0),-1)
+        # x2=x2.view(x2.size(0),-1)
+        # x1=torch.relu(self.fc01(x1))
+        # x2=torch.relu(self.fc02(x2))
+        # x=torch.cat((x1,x2),1)
 
-        x1=x1.view(x1.size(0),-1)
-        x2=x2.view(x2.size(0),-1)
-        x1=torch.relu(self.fc01(x1))
-        x2=torch.relu(self.fc02(x2))
-        x=torch.cat((x1,x2),1)
-        
+        x = x.unsqueeze(1)
+        x = torch.relu(self.conv(x))
+        x = self.pool(x)
+        x = self.flatten(x)
+
         y1 = torch.relu(self.fc11(x))
         y2 = torch.relu(self.fc12(y1))
         y3 = torch.relu(self.fc13(y2))
