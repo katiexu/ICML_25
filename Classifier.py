@@ -9,6 +9,13 @@ from sklearn.metrics import accuracy_score
 from Network import Attention, RNN, normalize, FC
 from FusionModel import cir_to_matrix
 import time
+from configs import configs
+from GVAE_translator import generate_circuits, get_gate_and_adj_matrix
+from GVAE_model import GVAE, preprocessing
+
+from Arguments import Arguments
+args = Arguments()
+
 
 torch.cuda.is_available = lambda : False
 
@@ -165,6 +172,21 @@ class Classifier:
             if arch['phase'] == 0:
                 net = insert_job(arch['single'], net) 
                 net = cir_to_matrix(net, arch['enta'], self.arch_code, self.fold)
+                circuit_ops = generate_circuits(net)
+                op_list, gate_matrix, adj_matrix = get_gate_and_adj_matrix(circuit_ops)
+                # preprocessing gate_matrix and adj_matrix
+                ops = torch.tensor(gate_matrix, dtype=torch.float32).unsqueeze(0)
+                adj = torch.tensor(adj_matrix, dtype=torch.float32).unsqueeze(0)
+                adj, ops, prep_reverse = preprocessing(adj, ops, **configs[4]['prep'])
+                # load pretrained GVAE model
+                checkpoint = torch.load('pretrained/dim-16/model-circuits_4_qubits.json.pt', map_location=torch.device('cpu'))
+                input_dim = 2 + len(args.allowed_gates) + args.n_qubits
+                GVAE_model = GVAE((input_dim, 32, 64, 128, 64, 32, 16), normalize=True, dropout=0.3, **configs[4]['GAE'])
+                GVAE_model.load_state_dict(checkpoint['model_state'])
+                Z = []
+                mu, logvar = GVAE_model.encoder(ops, adj)
+                Z.append(mu)
+                z = Z[0].squeeze(0)
             else:
                 net = insert_job(arch['enta'], net)
                 net = cir_to_matrix(arch['single'], net, self.arch_code, self.fold)           
