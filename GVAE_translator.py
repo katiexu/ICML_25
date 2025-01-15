@@ -17,8 +17,11 @@ def circuit_qnode(circuit_list, app=1, hamiltonian=None, edge=None):
     for params in list(circuit_list):
         if params == 'START':
             continue
-        elif params[0] == 'Identity':
-            qml.Identity(wires=params[1])
+        elif params[0] == 'Rot':
+            theta = pnp.array(params[2], requires_grad=True)
+            phi = pnp.array(params[3], requires_grad=True)
+            delta = pnp.array(params[4], requires_grad=True)
+            qml.Rot(theta, phi, delta, wires=params[1])
         elif params[0] == 'PauliX':
             qml.PauliX(wires=params[1])
         elif params[0] == 'PauliY':
@@ -46,9 +49,9 @@ def circuit_qnode(circuit_list, app=1, hamiltonian=None, edge=None):
             delta = pnp.array(params[4], requires_grad=True)
             qml.U3(theta, phi, delta, wires=params[1])
         elif params[0] == 'C(U3)':
-            theta = pnp.array(params[2], requires_grad=True)
-            phi = pnp.array(params[3], requires_grad=True)
-            delta = pnp.array(params[4], requires_grad=True)
+            theta = pnp.array(params[3], requires_grad=True)
+            phi = pnp.array(params[4], requires_grad=True)
+            delta = pnp.array(params[5], requires_grad=True)
             qml.ctrl(qml.U3, control=params[1])(theta, phi, delta, wires=params[2])
         elif params[0] == 'SWAP':
             qml.SWAP(wires=[params[1], params[2]])
@@ -84,11 +87,14 @@ def GVAE_translator(data_uploading, rot, enta):
     for i in range(0, args.n_layers):
         single_item = []
         for j in range(0, args.n_qubits):
-            d = int(data_uploading[i][j])
-            r = int(rot[i][j])
+            d = int(data_uploading[j][i])
+            r = int(rot[j][i])
             combination = f'{d}{r}'
             if combination == '00':
-                single_item.append(('Identity', j))
+                theta = np.random.uniform(0, 2 * np.pi)
+                phi = np.random.uniform(0, 2 * np.pi)
+                delta = np.random.uniform(0, 2 * np.pi)
+                single_item.append(('Rot', j, theta, phi, delta))
             elif combination == '01':
                 angle = np.random.uniform(0, 2 * np.pi)
                 single_item.append(('RX', j, angle))
@@ -101,14 +107,18 @@ def GVAE_translator(data_uploading, rot, enta):
         single_list.append(single_item)
 
         enta_item = []
-        for j, et in enumerate(enta[i]):
-            if j == int(et) - 1:
-                enta_item.append(('Identity', j))
+        for k in range(0, args.n_qubits):
+            et = int(enta[k][i])
+            if k == et - 1:
+                theta = np.random.uniform(0, 2 * np.pi)
+                phi = np.random.uniform(0, 2 * np.pi)
+                delta = np.random.uniform(0, 2 * np.pi)
+                enta_item.append(('Rot', k, theta, phi, delta))
             else:
                 theta = np.random.uniform(0, 2 * np.pi)
                 phi = np.random.uniform(0, 2 * np.pi)
                 delta = np.random.uniform(0, 2 * np.pi)
-                enta_item.append(('C(U3)', j, int(et) - 1, theta, phi, delta))
+                enta_item.append(('C(U3)', k, et - 1, theta, phi, delta))
         enta_list.append(enta_item)
 
     circuit_ops = []
@@ -184,7 +194,7 @@ def get_gate_and_adj_matrix(circuit_list):
         if len(ancestors) == 0:
             adj_matrix[0][op_list.index(op)] = 1
         else:
-            if op.name in ['CNOT', 'CZ', 'SWAP']:
+            if op.name in ['CNOT', 'CZ', 'SWAP', 'C(U3)']:
                 count = 0
                 wires = set()
                 for ancestor in ancestors[::-1]:
@@ -199,7 +209,7 @@ def get_gate_and_adj_matrix(circuit_list):
             else:
                 direct_ancestor = ancestors[-1]
                 adj_matrix[op_list.index(direct_ancestor)][op_list.index(op)] = 1
-        if op.name in ['CNOT', 'CZ', 'SWAP']:
+        if op.name in ['CNOT', 'CZ', 'SWAP', 'C(U3)']:
             wires = set()
             for descendant in descendants:
                 wires.update(set(descendant.wires) & set(op.wires))

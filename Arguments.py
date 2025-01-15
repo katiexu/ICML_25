@@ -31,7 +31,7 @@ class Arguments:
             self.fold        = 1
             self.init_weight = 'init_weight_'+ task +'_' + str(self.n_qubits)
 
-            self.allowed_gates = ['Identity', 'RX', 'RY', 'RZ', 'C(U3)']
+            self.allowed_gates = ['Rot', 'RX', 'RY', 'RZ', 'C(U3)']
 
             if task == ('MNIST-10' or 'FASHION-10'):
                 self.n_qubits   = 10 

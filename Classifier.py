@@ -10,7 +10,8 @@ from Network import Attention, RNN, normalize, FC
 from FusionModel import cir_to_matrix
 import time
 from configs import configs
-from GVAE_translator import generate_circuits, get_gate_and_adj_matrix
+# from GVAE_translator import generate_circuits, get_gate_and_adj_matrix
+from GVAE_translator_NO_pennylane import generate_circuits, get_gate_and_adj_matrix
 from GVAE_model import GVAE, preprocessing
 
 from Arguments import Arguments
